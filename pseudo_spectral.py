@@ -49,6 +49,8 @@ def get_Gfunc(zfunc):
         Gfunc = Grazor
     elif zfunc == 'gauss':
         Gfunc = Ggauss  
+    elif zfunc == 'cons':
+        Gfunc = Glog 
     else:
         print("[get_Gfunc]: zfunc not understood, got %s, exiting..." %(zfunc))
         quit() 
@@ -63,6 +65,17 @@ def Grazor(r, rp, pmpp):
     R2  = r**2. + rp**2. - 2.*r*rp*np.cos(pmpp) + eps**2. 
     return -R2**(-0.5)  
 
+# \func Glog() 
+# Green's function for infinite disk 
+#   Z(r,z) = const 
+# pmpp = \phi - \phi' 
+def Glog(r, rp, pmpp): 
+    eps = 0.0 
+    R2  = r**2. + rp**2. - 2.*r*rp*np.cos(pmpp) + eps**2. 
+    return np.log(R2)  
+
+
+
 # \func Ggauss()
 # Green's function for Gaussian vertical structure
 #   Z(r,z) \propto exp(-z^2/( 2 H^2 (r) ))
@@ -72,7 +85,9 @@ def Ggauss(r, rp, pmpp):
     R2  = (r**2. + rp**2. - 2.*r*rp*np.cos(pmpp) + eps**2.)/(H(rp))**2. 
     fac = -np.exp(R2/4.0)/(np.sqrt(2.*np.pi) * H(rp) )
     # here kn(0,x) is the modified bessel function of the 2nd kind 
-    return fac*kn(0,R2/4.0)  
+    fac *= kn(0,R2/4.) 
+    print(kn(0,1.))
+    return fac  
 
 # \func H()
 # Scale height function, currently just assumed to be constant  
@@ -106,6 +121,11 @@ def init_data(prob,R,p):
         Rk   = lambda rk,pk: np.sqrt( R**2. + rk**2. - 2.*R*rk*np.cos(p-pk) )
         dens = lambda rk,pk: np.exp(-Rk(rk,pk)/sig)/(2.*np.pi*sig**2.)
         data = 2.*dens(1.,1e-3) + 0.5*dens(1.,np.pi+1e-3) + dens(0.9,0.75*np.pi) 
+    elif prob == 'rotcyl':
+        sig = 0.1
+        Rk   = lambda rk,pk: np.sqrt( R**2. + rk**2. - 2.*R*rk*np.cos(p-pk) )
+        dens = lambda rk,pk: np.exp(-Rk(rk,pk)**2./(2.*sig**2.))/(2.*np.pi*sig**2.)
+        data = dens(1., np.pi/4. + 1e-3) + dens(1.,5.*np.pi/4. + 1e-3) + 2e-2/(3.2*np.pi) 
     else:
         print('[init_data]: Prob not understood, got %s, exiting...' %(prob))
         quit() 
@@ -163,15 +183,15 @@ def ifft(data):
 # Initializes everything to be passed to the solver 
 def initialize(prob, zfunc, log):
     # first setup grid data based on prob  
-    nx1 = 256
-    nx2 = 512
+    nx1 = 128
+    nx2 = 128
     if prob == 'constant':
         x1min = 0.4
         x1max = 2.5
         x2min = 0.0
         x2max = 2.0*np.pi
     elif prob == 'exp':
-        x1min = 1e-1
+        x1min = 1e-2
         x1max = 20.0
         x2min = 0.0
         x2max = 2.0*np.pi
@@ -181,13 +201,18 @@ def initialize(prob, zfunc, log):
         x2min = 0.0
         x2max = 2.0*np.pi
     elif prob == 'kuzmin':
-        x1min = 1e-3
+        x1min = 0.1 
         x1max = 20.0
         x2min = 0.0
         x2max = 2.0*np.pi
     elif prob == 'cylinders': # cylinder prob of Chan et al. 2005
-        x1min = 1e-1
+        x1min = 1.0
         x1max = 5.0
+        x2min = 0.0
+        x2max = 2.0*np.pi
+    elif prob == 'rotcyl':
+        x1min = 0.2
+        x1max = 1.8
         x2min = 0.0
         x2max = 2.0*np.pi
     else:
@@ -248,10 +273,14 @@ def solve(myinit):
             # here the last axis is the rp axis (the axis of integration)  
             Phim[j,i] = trapz(fdata[j,:] * fIdata[j,i,:], x=x1c)
         '''
+
+    print(Phim[0,0]) 
               
     # Now transfer the potential back to real space
     Phi = ifft(Phim)/float(nx2)  
-    Phi = np.real(Phi) 
+    #Phi = np.real(Phi) 
+
+    print(np.mean(Phi)) 
 
     return Phi 
 #\func plot()
@@ -305,7 +334,7 @@ def plot(Phi, myinit, prob, ana):
             
         print('[plot]: Plotting analytical solution for %s prob' %(prob)) 
         # Compute RMS error 
-        rms = np.sum(np.sqrt( (Phiana - Phi)**2.))/(float(Phiana.size))
+        rms = np.sqrt( np.sum((Phiana - Phi)**2.)/(float(Phiana.size)) )
 
         # Plot analytic result 
         plt.figure(facecolor='white')
@@ -318,7 +347,7 @@ def plot(Phi, myinit, prob, ana):
 
 
     
-    im  = ax1.pcolorfast(x1cf, x2cf, Phi) 
+    im  = ax1.pcolorfast(x1cf, x2cf, Phi,cmap='magma') 
     ax1.set_aspect('equal') 
     ax1.set_xlabel('x [code units]')
     ax1.set_ylabel('y [code units]') 
