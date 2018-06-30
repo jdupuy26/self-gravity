@@ -1,0 +1,36 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+## parameter
+## density in cartesian denC(x,y)
+## density in polar coordinate denP(r,phi) 
+## G=6.674*10^(-11) Gravity constant
+## R0 reference radius
+## H thickness of the plate
+##Idea: we know the information about the cloud in polar coordinate, but we only know how to solve problems in cartesian coordinate
+## so we want to put transform polar into cartesian.
+
+
+R=1
+R0=1
+phi=1
+G=6.674*10^(-11)
+H=1
+
+def denC(x,y):
+  r=R0*np.exp(x/R0)
+  phi=y/R0
+  return denP(r,phi)
+
+def FTdenC(denC):
+  A=np.fft.fft(denC)
+  kx=FTdenC.real
+  ky=FTdenC.imag
+  FTdenC=(kx,ky,A)
+  return FTdenC
+
+def potential(FTdenC)
+  (kx,ky,A)=FTdenC
+  k=np.sqrt(kx^2+ky^2)
+  B=-1*(2*np.pi*G*A)/(k*(1+k*H))
+  return fft.ifft(B)
