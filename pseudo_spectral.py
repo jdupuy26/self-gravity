@@ -117,7 +117,7 @@ def init_data(prob,R,p):
         M = 1.
         data = a*M/(2.*np.pi*(R**2. + a**2.)**(1.5)) 
     elif prob == 'cylinders':
-        sig = 1.0
+        sig = 0.1
         Rk   = lambda rk,pk: np.sqrt( R**2. + rk**2. - 2.*R*rk*np.cos(p-pk) )
         dens = lambda rk,pk: np.exp(-Rk(rk,pk)/sig)/(2.*np.pi*sig**2.)
         data = 2.*dens(1.,1e-3) + 0.5*dens(1.,np.pi+1e-3) + dens(0.9,0.75*np.pi) 
@@ -183,16 +183,16 @@ def ifft(data):
 # Initializes everything to be passed to the solver 
 def initialize(prob, zfunc, log):
     # first setup grid data based on prob  
-    nx1 = 128
-    nx2 = 128
+    nx1 = 256
+    nx2 = 256 
     if prob == 'constant':
         x1min = 0.4
         x1max = 2.5
         x2min = 0.0
         x2max = 2.0*np.pi
     elif prob == 'exp':
-        x1min = 1e-2
-        x1max = 20.0
+        x1min = 1e-1
+        x1max = 30.0
         x2min = 0.0
         x2max = 2.0*np.pi
     elif prob == 'mestel':
@@ -206,8 +206,8 @@ def initialize(prob, zfunc, log):
         x2min = 0.0
         x2max = 2.0*np.pi
     elif prob == 'cylinders': # cylinder prob of Chan et al. 2005
-        x1min = 1.0
-        x1max = 5.0
+        x1min = 0.2
+        x1max = 1.8
         x2min = 0.0
         x2max = 2.0*np.pi
     elif prob == 'rotcyl':
@@ -265,22 +265,20 @@ def solve(myinit):
     fIdata = fft(Idata) # dct(Idata,type=2,axis=0)/(2.0*np.pi)  
 
     # Now compute potential in Fourier space 
-    Phim = np.zeros( (nx2, nx1), dtype='complex') 
+    Phim  = np.zeros( (nx2, nx1), dtype='complex')
     for j in range(nx2):
-        Phim[j] = trapz(fdata[j,:] * fIdata[j,:,:], axis=-1, x=x1c) 
+        Phim[j]  = trapz(fdata[j,:] * fIdata[j,:,:] , axis=-1, x=x1c)
         '''
         for i in range(nx1):
             # here the last axis is the rp axis (the axis of integration)  
             Phim[j,i] = trapz(fdata[j,:] * fIdata[j,i,:], x=x1c)
         '''
 
-    print(Phim[0,0]) 
-              
     # Now transfer the potential back to real space
     Phi = ifft(Phim)/float(nx2)  
-    #Phi = np.real(Phi) 
+    Phi = np.real(Phi) 
 
-    print(np.mean(Phi)) 
+    print(np.mean(Phi))
 
     return Phi 
 #\func plot()
@@ -324,12 +322,16 @@ def plot(Phi, myinit, prob, ana):
             Phiana = -G*M/np.sqrt( X1C**2. + a**2. ) 
 
         elif prob == 'cylinders':
-            sig  = 1.0
+            sig  = 0.1
             Rk   = lambda rk,pk: np.sqrt( X1C**2. + rk**2. - 2.*X1C*rk*np.cos(X2C-pk) )
             yk   = lambda rk,pk: Rk(rk,pk)/(2.*sig)
             Phik = lambda rk,pk: -0.5*(G/sig**2.)*Rk(rk,pk)*( i0(yk(rk,pk))*kn(1,yk(rk,pk)) - i1(yk(rk,pk))*kn(0,yk(rk,pk)) )
 
             Phiana = 2.*Phik(1.,1e-3) + 0.5*Phik(1.,np.pi+1e-3) + Phik(0.9,0.75*np.pi)
+
+        else:
+            print('[plot]: Analytic solution not provided for prob: %s, exiting...' %(prob))
+            quit() 
             
             
         print('[plot]: Plotting analytical solution for %s prob' %(prob)) 
@@ -370,11 +372,14 @@ def main():
                         help="Switch for log-grid") 
     parser.add_argument('--ana', action='store_true',required=False,
                         help="Switch to compare numerical to analytical solution")
+    parser.add_argument('--gana', action='store_true', required=False,
+                        help="Switch to compare numerical grav acc to analytic grav acc")
     args  = parser.parse_args()
     prob  = args.prob
     zfunc = args.zfunc 
     log   = args.log 
     ana   = args.ana
+    gana  = args.gana
 
     # Step 1) Initialize the system
     pass_to_solve = initialize(prob,zfunc,log) 
