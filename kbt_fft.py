@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 # Scipy imports
 from scipy.special import kn, gamma 
 from scipy.special import i0, i1, ellipe, ellipk  
+from scipy.signal import convolve2d
 # Argparse
 import argparse
 from argparse import RawTextHelpFormatter
@@ -92,7 +93,7 @@ def pad_kernel(Kfunc, u, p, n):
     ukern  = np.arange(umin,umax+du,du)
 
     U, P = np.meshgrid(ukern,p,indexing='xy')
-    return Kfunc(U,P) 
+    return ukern, Kfunc(U,P) 
 
 
 # \func init_data()
@@ -156,7 +157,7 @@ def init_grid(x1min,x1max,x2min,x2max,nx1,nx2):
 # Initializes everything to be passed to the solver 
 def initialize(prob, zfunc):
     # first setup grid data based on prob  
-    nx1 = 128 
+    nx1 = 128
     nx2 = 128 
     x2min = 0.0
     x2max = 2.*np.pi
@@ -218,14 +219,16 @@ def solve(myinit):
     nx2  = len(x2c) 
     nx1  = len(x1c) 
 
+    U, P = np.meshgrid(u,x2c,indexing='xy')
+
     # Take the 2D FFT of Sdata
     pad  = 1 
-    Spad = pad_array(Sdata, pad) 
-    #Kpad = pad_kernel(Krazor, u, x2c, pad) 
+    Spad       = pad_array(Sdata, pad) 
+    upad, Kpad = pad_kernel(Krazor, u, x2c, pad) 
 
     FS   = np.fft.fft2(Spad)/(4.*np.pi**2.) 
-    #FK   = np.fft.fft2(Kpad)
-    
+    FK   = np.fft.fft2(Kpad)#/(4.*np.pi**2.)
+    ''' 
     # Compute the potential in Fourier space
         # First get m, alpha coeffs 
     du   =   u[1] -   u[0] 
@@ -236,8 +239,8 @@ def solve(myinit):
     umin   = u[ 0] - npad*du
     umax   = u[-1] + npad*du
         # get m, a
-    m  = np.arange(0,     nx2,1)*((2.0*np.pi)/(x1c[-1]-x1c[0])) 
-    a  = np.arange(0, pad*nx1,1)*((2.0*np.pi)/(umax-umin))
+    m  = np.arange(1,     nx2,1)*((2.0*np.pi)/(x2c[-1]-x2c[0])) 
+    a  = np.arange(1, pad*nx1,1)*((2.0*np.pi)/(umax-umin))
 
     A, M = np.meshgrid(a,m,indexing='xy')
     Nam  = np.zeros( (nx2, pad*nx1),dtype='complex')
@@ -248,16 +251,17 @@ def solve(myinit):
     #Nam  = N(A,M)
 
     FV    = -G*Nam*FS 
-    #FV = FS*FK
+    '''
+    FV = FS*FK
    
     # Now take the inverse 2D FFT of FV to get V(u,p)
     Vup = np.fft.ifft2(FV)/(4.*np.pi**2.)  
     Vup = Vup[:,((nx1*pad-nx1)/2):((nx1*pad+nx1)/2)].copy() 
-    #Vup = Vup[:,0:nx1]
+    #Vup = Vup[:,nx1*(pad-1):]
 
     # Apply u-factor to get Phi 
-    U, P = np.meshgrid(u,x2c,indexing='xy')
-    Phi  = np.real(Vup.copy())*(x1c**(-0.5))
+    Phi  = np.real(Vup.copy())*(np.exp(-0.5*u))
+
 
     return Phi 
 
@@ -270,14 +274,15 @@ def plot(Phi, myinit, prob, ana):
 
     # Parse gdata 
     x1f, x1c, x2f, x2c = gdata 
-    
+    u    = np.log(x1c) 
+
     # Plot Phi
     fig = plt.figure(facecolor='white')
     ax1 = fig.add_subplot(111) 
 
     X1F, X2F   = np.meshgrid(x1f, x2f, indexing='xy')
     x1cf, x2cf = X1F*np.cos(X2F), X1F*np.sin(X2F) 
-    
+
     if ana:
         X1C, X2C = np.meshgrid(x1c, x2c, indexing='xy') 
         if prob == 'exp':
@@ -336,7 +341,6 @@ def plot(Phi, myinit, prob, ana):
     cbar = fig.colorbar(im,label='$\Phi_G$')
 
     # Plot data
-    u    = np.log(x1c) 
     data = Sdata/np.exp(1.5*u)
     '''
     
