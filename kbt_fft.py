@@ -52,21 +52,28 @@ def Krazor(u,p):
 
 # \func Nfunc(), explicit form for FT of the kernel
 def N(a,m):
+
+    mask = (a**2. + m**2.) > 1e20
+    N = np.zeros(a.shape, dtype='complex')
+
+    N[ mask] = np.pi*np.sqrt(a[mask]**2. + m[mask]**2.)
+    N[~mask] = nfunc(a[~mask],m[~mask])
+    
+    return N
+
+def nfunc(a,m):
     arg1 = (m + 0.5 + 1j*a)/2.  
     arg2 = (m + 0.5 - 1j*a)/2. 
     arg3 = (m + 1.5 + 1j*a)/2. 
     arg4 = (m + 1.5 - 1j*a)/2. 
 
-    if ( (a**2. + m**2.) > 100.):
-        # use stirlings
-        return np.pi*np.sqrt(a**2. + m**2.)  
-    else:
-        f1 = gamma(arg1)
-        f2 = gamma(arg2)
-        f3 = gamma(arg3)
-        f4 = gamma(arg4)
-         
-        return 0.5*np.pi*(f1*f2)/(f3*f4) 
+    f1 = gamma(arg1)
+    f2 = gamma(arg2)
+    f3 = gamma(arg3)
+    f4 = gamma(arg4)
+     
+    return np.pi*(f1*f2)/(f3*f4) 
+
 
 # \func pad_array(), pads array with zeros 
 def pad_array(data, n):
@@ -105,7 +112,7 @@ def init_data(prob,R,p):
         sig0 = 2.e-3
         data = sig0*np.ones( (nx2, nx1) ) 
     elif prob == 'exp':
-        Rd   = 1.
+        Rd   = 1. 
         data = np.exp(-R/Rd)
     elif prob == 'mestel':
         v0   = 1.
@@ -115,10 +122,10 @@ def init_data(prob,R,p):
         M = 1.
         data = a*M/(2.*np.pi*(R**2. + a**2.)**(1.5)) 
     elif prob == 'cylinders':
-        sig = 0.1
+        sig = 0.1 
         Rk   = lambda rk,pk: np.sqrt( R**2. + rk**2. - 2.*R*rk*np.cos(p-pk) )
         dens = lambda rk,pk: np.exp(-Rk(rk,pk)/sig)/(2.*np.pi*sig**2.)
-        data = 2.*dens(3.,1e-3) #+ 0.5*dens(3.,np.pi+1e-3) + dens(2.,0.75*np.pi) 
+        data = 2.*dens(3., 1e-3) + 0.5*dens(3.,np.pi+1e-3) + dens(2.,0.75*np.pi) 
     elif prob == 'rotcyl':
         sig = 0.1
         Rk   = lambda rk,pk: np.sqrt( R**2. + rk**2. - 2.*R*rk*np.cos(p-pk) )
@@ -145,8 +152,11 @@ def init_grid(x1min,x1max,x2min,x2max,nx1,nx2):
     dlx1 = lx1f[1]-lx1f[0]
     lx1c = np.arange(np.log(x1min)+0.5*dlx1,
                      np.log(x1max)         , dlx1)
-    x1c  = np.exp(lx1c)  
     
+    x1c  = 0.5*(x1f[:-1] + x1f[1:]) #np.exp(lx1c)  
+
+    #x1c  = np.exp(lx1c) 
+
     dx2 = x2f[1] - x2f[0] 
     x2c = np.arange(x2min+0.5*dx2,x2max, dx2) 
 
@@ -157,25 +167,25 @@ def init_grid(x1min,x1max,x2min,x2max,nx1,nx2):
 # Initializes everything to be passed to the solver 
 def initialize(prob, zfunc):
     # first setup grid data based on prob  
-    nx1 = 128
-    nx2 = 128 
+    nx1 = 256 
+    nx2 = 256
     x2min = 0.0
     x2max = 2.*np.pi
     if prob == 'constant':
         x1min = 0.4
         x1max = 2.5
     elif prob == 'exp':
-        x1min = 1e-2
+        x1min = 1e-2 
         x1max = 20.0
     elif prob == 'mestel':
         x1min = 1e-1
-        x1max = 200.0
+        x1max = 20.0
     elif prob == 'kuzmin':
         x1min = 0.1 
         x1max = 20.0
     elif prob == 'cylinders': # cylinder prob of Chan et al. 2005
-        x1min = 0.1 
-        x1max = 6.0
+        x1min = 1e-2 
+        x1max = 20.0
     elif prob == 'rotcyl':
         x1min = 0.2
         x1max = 1.8
@@ -196,22 +206,17 @@ def initialize(prob, zfunc):
     U, P  = np.meshgrid(u,x2c,indexing='xy') 
     Sdata = np.exp(1.5*U)*(data.copy())  
 
-    # Initialize Kdata
-    #Kfunc = get_Kfunc(zfunc)
-    #Kdata = Kfunc(U,P)  
-    Kdata  = 0
-
     # Package the grid data 
     gdata = (x1f, x1c, x2f, x2c) 
 
-    return gdata, Sdata, Kdata  
+    return gdata, Sdata 
 
 #\func solve()
 # Given the returned stuff from initialize
 # solves for the potential \PHI(R,\phi)
 def solve(myinit):
     # Parse mystuff
-    gdata, Sdata, Kdata = myinit 
+    gdata, Sdata    = myinit 
 
     # Parse gdata 
     x1f, x1c, x2f, x2c = gdata 
@@ -222,46 +227,46 @@ def solve(myinit):
     U, P = np.meshgrid(u,x2c,indexing='xy')
 
     # Take the 2D FFT of Sdata
-    pad  = 1 
-    Spad       = pad_array(Sdata, pad) 
-    upad, Kpad = pad_kernel(Krazor, u, x2c, pad) 
+    pad           = 4 
+    Spad          = np.zeros((nx2, pad*nx1))
+    Spad[:,0:nx1] = Sdata.copy() 
 
-    FS   = np.fft.fft2(Spad)/(4.*np.pi**2.) 
-    FK   = np.fft.fft2(Kpad)#/(4.*np.pi**2.)
-    ''' 
+    FS         = np.fft.fft2(Spad) 
     # Compute the potential in Fourier space
         # First get m, alpha coeffs 
     du   =   u[1] -   u[0] 
     dp   = x2c[1] - x2c[0]
-        # no. of pad cells on each side 
-    npad = (nx1*pad-nx1)/2
-        # get new umin, umax
-    umin   = u[ 0] - npad*du
-    umax   = u[-1] + npad*du
-        # get m, a
-    m  = np.arange(1,     nx2,1)*((2.0*np.pi)/(x2c[-1]-x2c[0])) 
-    a  = np.arange(1, pad*nx1,1)*((2.0*np.pi)/(umax-umin))
+        # get m, a (kp, ku)
+    dku  = 2.0*np.pi/float(pad*nx1)
+    dkp  = 2.0*np.pi/float(    nx2)
 
-    A, M = np.meshgrid(a,m,indexing='xy')
+    ku   = np.arange(0, pad*nx1, 1.)*dku/du
+    kp   = np.arange(0,     nx2, 1.)*dkp/dp 
+
+    ku[ (pad*nx1)//2: ] -= pad*nx1*dku/du
+    kp[ (    nx2)//2: ] -=     nx2*dkp/dp
+    
+    A, M = np.meshgrid(ku,kp,indexing='xy')
+
+    Nam  = N(A,M)
+    Nam[np.isnan(Nam)] = 0.
+    '''
     Nam  = np.zeros( (nx2, pad*nx1),dtype='complex')
     for j in range(nx2):
         for i in range(pad*nx1):
-            Nam[j,i] = N(a[i],m[j])
-
-    #Nam  = N(A,M)
-
-    FV    = -G*Nam*FS 
+            Nam[j,i] = N(ku[i],kp[j])
+            if np.isnan(Nam[j,i]):
+                Nam[j,i] = 0.
+                print(j,i)
     '''
-    FV = FS*FK
-   
+    FV    = -G*Nam*FS 
+    
     # Now take the inverse 2D FFT of FV to get V(u,p)
-    Vup = np.fft.ifft2(FV)/(4.*np.pi**2.)  
-    Vup = Vup[:,((nx1*pad-nx1)/2):((nx1*pad+nx1)/2)].copy() 
-    #Vup = Vup[:,nx1*(pad-1):]
+    Vup = np.fft.ifft2(FV)  
+    Vup = Vup[:,:nx1].copy() 
 
     # Apply u-factor to get Phi 
-    Phi  = np.real(Vup.copy())*(np.exp(-0.5*u))
-
+    Phi  = np.real(Vup)*(np.exp(-0.5*U))
 
     return Phi 
 
@@ -270,7 +275,7 @@ def solve(myinit):
 # plots the potential 
 def plot(Phi, myinit, prob, ana):
     # Parse myinit
-    gdata, Sdata, Kdata = myinit
+    gdata, Sdata = myinit
 
     # Parse gdata 
     x1f, x1c, x2f, x2c = gdata 
@@ -286,7 +291,7 @@ def plot(Phi, myinit, prob, ana):
     if ana:
         X1C, X2C = np.meshgrid(x1c, x2c, indexing='xy') 
         if prob == 'exp':
-            Rd   = 1.
+            Rd   = 1. 
             sig0 = 1.
             y   = X1C/(2.*Rd)  
             Phiana = -np.pi*G*sig0*X1C*(i0(y)*kn(1,y) - i1(y)*kn(0,y))   
@@ -307,12 +312,12 @@ def plot(Phi, myinit, prob, ana):
             Phiana = -G*M/np.sqrt( X1C**2. + a**2. ) 
 
         elif prob == 'cylinders':
-            sig  = 0.1 
+            sig  = 0.1
             Rk   = lambda rk,pk: np.sqrt( X1C**2. + rk**2. - 2.*X1C*rk*np.cos(X2C-pk) )
             yk   = lambda rk,pk: Rk(rk,pk)/(2.*sig)
             Phik = lambda rk,pk: -0.5*(G/sig**2.)*Rk(rk,pk)*( i0(yk(rk,pk))*kn(1,yk(rk,pk)) - i1(yk(rk,pk))*kn(0,yk(rk,pk)) )
 
-            Phiana = 2.*Phik(3.,1e-3) #+ 0.5*Phik(3.,np.pi+1e-3) + Phik(2.0,0.75*np.pi)
+            Phiana = 2.*Phik(3.,1e-3) + 0.5*Phik(3.,np.pi+1e-3) + Phik(2.0,0.75*np.pi)
 
         else:
             print('[plot]: Analytic solution not provided for prob: %s, exiting...' %(prob))
@@ -333,7 +338,6 @@ def plot(Phi, myinit, prob, ana):
         plt.legend(loc=4)
 
 
-    
     im  = ax1.pcolorfast(x1cf, x2cf, Phi,cmap='magma') 
     ax1.set_aspect('equal') 
     ax1.set_xlabel('x [code units]')
