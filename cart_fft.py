@@ -149,12 +149,12 @@ def init_grid(x1min,x1max,x2min,x2max,nx1,nx2):
 # Initializes everything to be passed to the solver 
 def initialize(prob, zfunc):
     # first setup grid data based on prob  
-    nx1 = 512 
-    nx2 = 512 
-    x1min = -5.
-    x1max =  5.
-    x2min = -5.
-    x2max =  5.
+    nx1 = 256 
+    nx2 = 256 
+    x1min = -10.
+    x1max =  10.
+    x2min = -10.
+    x2max =  10.
 
     # Initialize the grid
     x1f, x1c, x2f, x2c = init_grid(x1min,x1max,
@@ -162,6 +162,8 @@ def initialize(prob, zfunc):
 
     # Initialize the grid data 
     data  = init_data(prob,x1c,x2c) 
+    data *= 2.*np.pi*G
+    #data -= np.mean(data) 
 
     # Initialize Kdata
     X, Y  = np.meshgrid(x1c, x2c, indexing='xy')
@@ -211,15 +213,23 @@ def solve(myinit):
     dx2 = x2c[1] - x2c[0]
     dky = 2.0*np.pi/float(pad*nx2)
     for j in range(pad*nx2):
-        ky = j*dky
+        #ky = j*dky
+        if j < (pad*nx2) //2:
+            ky = j*dky/dx2
+        else:
+            ky = (j-pad*nx2)*dky/dx2
         for i in range(pad*nx1):
-            kx = i*dkx
-            if (i == 0) and (j == 0):
-                FS[j,i] = 0.
+            #kx = i*dkx
+            if i < (pad*nx1)//2:
+                kx = i*dkx/dx1
             else:
-                #pcoeff   = -0.5/np.sqrt(kx**2. + ky**2.)
-                pcoeff   = 1.0/((2.0*np.cos(i*dkx)-2.0)/dx1**2. +
-                                (2.0*np.cos(j*dky)-2.0)/dx2**2.)
+                kx = (i-pad*nx1)*dkx/dx1
+            if (i == 0) and (j == 0):
+                FS[j,i] = np.mean(pdata)
+            else:
+                pcoeff   = -1./np.sqrt(kx**2. + ky**2.)
+                #pcoeff   = 1.0/((2.0*np.cos(i*dkx)-2.0)/dx1**2. +
+                #                (2.0*np.cos(j*dky)-2.0)/dx2**2.)
                 FS[j,i] *= pcoeff 
     FV = FS.copy() 
             
@@ -315,7 +325,7 @@ def plot(Phi, myinit, prob, ana):
 
     # Plot data
     data = Sdata
-    
+    '''
     fig1 = plt.figure(facecolor='white')
     ax2 = fig1.add_subplot(111) 
     im  = ax2.pcolorfast(X, Y, data,cmap='magma') 
@@ -323,6 +333,7 @@ def plot(Phi, myinit, prob, ana):
     ax2.set_xlabel('x [code units]')
     ax2.set_ylabel('y [code units]') 
     cbar = fig1.colorbar(im,label='$\Sigma$')
+    '''
     plt.show() 
     
     return 
