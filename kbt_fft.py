@@ -53,12 +53,12 @@ def Krazor(u,p):
 # \func Nfunc(), explicit form for FT of the kernel
 def N(a,m):
 
-    mask = (a**2. + m**2.) > 1e20
+    mask = (a**2. + m**2.) > 1e4
     N = np.zeros(a.shape, dtype='complex')
 
-    N[ mask] = np.pi*np.sqrt(a[mask]**2. + m[mask]**2.)
+    N[ mask] = 2.*np.pi*(a[mask]**2. + m[mask]**2.)**(-0.5)
     N[~mask] = nfunc(a[~mask],m[~mask])
-    
+
     return N
 
 def nfunc(a,m):
@@ -245,7 +245,7 @@ def solve(myinit):
 
     ku[ (pad*nx1)//2: ] -= pad*nx1*dku/du
     kp[ (    nx2)//2: ] -=     nx2*dkp/dp
-    
+
     A, M = np.meshgrid(ku,kp,indexing='xy')
 
     Nam  = N(A,M)
